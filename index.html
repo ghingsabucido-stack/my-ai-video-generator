@@ -4,76 +4,289 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#10101c">
   <title>My AI Video Generator</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
+      padding: 24px 14px;
       font-family: Arial, sans-serif;
       background: #10101c;
-      color: white;
+      color: #fff;
       min-height: 100vh;
       display: grid;
       place-items: center;
     }
+
     main {
-      width: min(90%, 650px);
+      width: min(100%, 720px);
       padding: 28px;
-      box-sizing: border-box;
       background: #1d1d30;
-      border-radius: 18px;
+      border: 1px solid #34344e;
+      border-radius: 20px;
+      box-shadow: 0 18px 55px #0005;
     }
-    h1 { color: #c4b5fd; }
+
+    h1 {
+      color: #c4b5fd;
+      margin-top: 0;
+    }
+
+    .subtitle {
+      color: #c5c5d8;
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      margin: 22px 0 8px;
+      font-weight: bold;
+    }
+
     textarea {
+      display: block;
       width: 100%;
-      height: 120px;
-      padding: 12px;
-      box-sizing: border-box;
-      border-radius: 10px;
+      min-height: 145px;
+      padding: 14px;
+      border: 1px solid #555575;
+      border-radius: 12px;
+      background: #111122;
+      color: white;
       font: inherit;
-      margin: 12px 0;
+      line-height: 1.5;
+      resize: vertical;
     }
+
+    textarea:focus {
+      outline: 2px solid #a78bfa;
+      border-color: transparent;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
     button {
-      padding: 13px 20px;
+      padding: 13px 19px;
       border: 0;
       border-radius: 10px;
       background: #8b5cf6;
       color: white;
+      font-size: 15px;
       font-weight: bold;
       cursor: pointer;
     }
-    #message { color: #ddd6fe; line-height: 1.5; }
+
+    button:hover {
+      background: #7c3aed;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .secondary {
+      background: #383850;
+    }
+
+    #message {
+      color: #ddd6fe;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
     #preview {
-      margin-top: 20px;
-      min-height: 120px;
+      margin-top: 18px;
+      min-height: 180px;
+      padding: 16px;
       border: 1px dashed #777;
       border-radius: 12px;
+      background: #131322;
       display: grid;
       place-items: center;
       text-align: center;
-      padding: 15px;
+      overflow-wrap: anywhere;
+    }
+
+    #preview video {
+      display: block;
+      width: 100%;
+      max-height: 480px;
+      border-radius: 10px;
+      background: #000;
+    }
+
+    #preview a {
+      color: #c4b5fd;
+    }
+
+    .hint {
+      color: #a6a6bf;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    footer {
+      margin-top: 22px;
+      color: #9999b5;
+      font-size: 12px;
+      text-align: center;
     }
   </style>
 </head>
+
 <body>
   <main>
     <h1>✨ My AI Video Generator</h1>
-    <p>Describe the video you want to create.</p>
-    <textarea id="prompt" placeholder="Example: A cute bunny in a magical forest..."></textarea>
-    <button onclick="generateVideo()">Generate Video</button>
-    <p id="message">Your video preview will appear here.</p>
-    <div id="preview">🎬 Video preview</div>
+
+    <p class="subtitle">
+      Turn your imagination into a video. Describe the scene
+      you want to create below.
+    </p>
+
+    <label for="prompt">Describe your video</label>
+
+    <textarea
+      id="prompt"
+      maxlength="2000"
+      placeholder="Example: A cute golden-yellow bunny with brown eyes and blue denim overalls discovers a glowing star in a magical forest..."
+    ></textarea>
+
+    <div class="actions">
+      <button id="generateButton" type="button">
+        🎬 Generate Video
+      </button>
+
+      <button id="clearButton" class="secondary" type="button">
+        Clear
+      </button>
+    </div>
+
+    <p id="message" role="status" aria-live="polite">
+      Ready when you are. Enter a prompt to begin.
+    </p>
+
+    <section id="preview" aria-label="Video preview">
+      <div>
+        <div style="font-size: 42px;">🎞️</div>
+        <p>Your generated video will appear here.</p>
+      </div>
+    </section>
+
+    <p class="hint">
+      Video generation requires a working server API and may use
+      account credits. Check your provider's pricing before generating.
+    </p>
+
+    <footer>
+      My AI Video Generator · Powered by your connected AI service
+    </footer>
   </main>
+
   <script>
-    function generateVideo() {
-      const prompt = document.getElementById("prompt").value.trim();
-      const message = document.getElementById("message");
+    const promptInput = document.getElementById("prompt");
+    const generateButton = document.getElementById("generateButton");
+    const clearButton = document.getElementById("clearButton");
+    const message = document.getElementById("message");
+    const preview = document.getElementById("preview");
+
+    generateButton.addEventListener("click", generateVideo);
+
+    clearButton.addEventListener("click", () => {
+      promptInput.value = "";
+      message.textContent = "Prompt cleared. Enter a new video description.";
+      preview.replaceChildren();
+      const placeholder = document.createElement("div");
+      placeholder.textContent = "🎞️ Your video preview will appear here.";
+      preview.appendChild(placeholder);
+    });
+
+    function showVideo(url) {
+      if (typeof url !== "string") return false;
+
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+          return false;
+        }
+
+        const video = document.createElement("video");
+        video.controls = true;
+        video.playsInline = true;
+        video.src = parsed.href;
+
+        preview.replaceChildren(video);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function generateVideo() {
+      const prompt = promptInput.value.trim();
+
       if (!prompt) {
         message.textContent = "Please enter a video description first.";
+        promptInput.focus();
         return;
       }
-      message.textContent =
-        "Your prompt is ready: " + prompt +
-        " — This is a demo interface. Connect an AI video model to generate an actual video.";
+
+      generateButton.disabled = true;
+      clearButton.disabled = true;
+      message.textContent = "Submitting your request to the video service...";
+      preview.textContent = "⏳ Waiting for the API response...";
+
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prompt })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+            data.message ||
+            "The video request failed. Check your API setup."
+          );
+        }
+
+        const videoUrl =
+          data.video_url ||
+          data.videoUrl ||
+          data.url ||
+          data.output_url;
+
+        if (videoUrl && showVideo(videoUrl)) {
+          message.textContent = "Your video is ready!";
+        } else {
+          message.textContent =
+            "The API responded. Your video may still be processing, " +
+            "or the response may contain a job ID instead of a video URL.";
+
+          preview.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (error) {
+        message.textContent = "Unable to generate video: " + error.message;
+        preview.textContent =
+          "Please check the deployment and server API configuration.";
+      } finally {
+        generateButton.disabled = false;
+        clearButton.disabled = false;
+      }
     }
   </script>
 </body>

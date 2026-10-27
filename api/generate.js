@@ -1,18 +1,52 @@
 
 export default async function handler(req, res) {
+  const apiKey = process.env.MAGIC_HOUR_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({
+      error: "Missing Magic Hour API key in Vercel."
+    });
+  }
+
+  // Check the status of an existing video.
+  if (req.method === "GET") {
+    const id = req.query?.id;
+
+    if (!id) {
+      return res.status(400).json({
+        error: "Please provide a video job ID."
+      });
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.magichour.ai/v1/video-projects/${encodeURIComponent(id)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`
+          }
+        }
+      );
+
+      const data = await response.json();
+
+      return res.status(response.status).json(data);
+    } catch {
+      return res.status(500).json({
+        error: "Unable to check video status."
+      });
+    }
+  }
+
+  // Create a new video only when requested.
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed"
+    });
   }
 
   try {
-    const apiKey = process.env.MAGIC_HOUR_API_KEY;
     const prompt = req.body?.prompt?.trim();
-
-    if (!apiKey) {
-      return res.status(500).json({
-        error: "Missing Magic Hour API key in Vercel."
-      });
-    }
 
     if (!prompt) {
       return res.status(400).json({
@@ -41,14 +75,7 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.message || data.error || "Magic Hour request failed."
-      });
-    }
-
-    return res.status(200).json(data);
+    return res.status(response.status).json(data);
   } catch {
     return res.status(500).json({
       error: "Unable to contact Magic Hour."

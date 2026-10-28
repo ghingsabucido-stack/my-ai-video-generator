@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
       {
         method: "POST",
         headers: {
@@ -38,26 +38,13 @@ export default async function handler(req, res) {
           "x-goog-api-key": apiKey
         },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: "You are a friendly children's storyteller. Write an original, delightful short story in simple English for children ages 3 to 7. Use a cute, warm narrator-friendly style, gentle humor, vivid but simple scenes, and a happy or comforting ending. Keep it around 120 to 180 words. Make it safe and age-appropriate. Return only the story, with a short title and no explanations."
-              }
-            ]
-          },
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Write a children's story about this topic: ${topic}`
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 600
-          }
+          model: "gemini-3.8-flash",
+          input:
+            "Write an original children's story in simple English " +
+            "for ages 3 to 7 about this topic: " + topic +
+            "\n\nMake it 120–180 words, warm, cute, safe, " +
+            "easy to narrate, and end happily. Include a short title. " +
+            "Return only the story, without explanations."
         })
       }
     );
@@ -66,16 +53,19 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error:
-          data.error?.message ||
-          "Story generation failed. Please try again."
+        error: data.error?.message || "Story generation failed."
       });
     }
 
-    const story = (data.candidates?.[0]?.content?.parts || [])
-      .map(part => part.text || "")
-      .join("\n")
-      .trim();
+    const story = (
+      data.output_text ||
+      data.output?.map(item =>
+        (item.content || [])
+          .map(part => part.text || "")
+          .join("\n")
+      ).join("\n") ||
+      ""
+    ).trim();
 
     if (!story) {
       return res.status(500).json({
@@ -84,7 +74,6 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ story });
-
   } catch (error) {
     return res.status(500).json({
       error: "Unable to generate the story. Please try again."

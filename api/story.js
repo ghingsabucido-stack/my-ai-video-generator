@@ -2,7 +2,7 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
-      error: "Method not allowed"
+      error: "Method not allowed."
     });
   }
 
@@ -10,12 +10,16 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: "Missing GEMINI_API_KEY in Vercel environment variables."
+      error:
+        "Missing GEMINI_API_KEY. Please check your Vercel environment variables."
     });
   }
 
   try {
-    const topic = req.body?.topic?.trim();
+    const topic =
+      typeof req.body?.topic === "string"
+        ? req.body.topic.trim()
+        : "";
 
     if (!topic) {
       return res.status(400).json({
@@ -38,13 +42,21 @@ export default async function handler(req, res) {
           "x-goog-api-key": apiKey
         },
         body: JSON.stringify({
-          model: "gemini-3.8-flash",
+          model: "gemini-3.1-flash-lite",
           input:
             "Write an original children's story in simple English " +
-            "for ages 3 to 7 about this topic: " + topic +
-            "\n\nMake it 120–180 words, warm, cute, safe, " +
-            "easy to narrate, and end happily. Include a short title. " +
-            "Return only the story, without explanations."
+            "for children ages 3 to 7 about this topic: " +
+            topic +
+            "\n\n" +
+            "Requirements:\n" +
+            "- Write 120 to 180 words.\n" +
+            "- Give the story a short, charming title.\n" +
+            "- Use simple English suitable for young children.\n" +
+            "- Make the story warm, cute, imaginative, and safe.\n" +
+            "- Include a clear beginning, middle, and ending.\n" +
+            "- End with a happy or comforting conclusion.\n" +
+            "- Make it suitable for children's video narration.\n" +
+            "- Return only the story and its title, without explanations."
         })
       }
     );
@@ -52,31 +64,45 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Gemini story API error:", data);
+
       return res.status(response.status).json({
-        error: data.error?.message || "Story generation failed."
+        error:
+          data.error?.message ||
+          "Story generation failed. Please try again."
       });
     }
 
     const story = (
       data.output_text ||
-      data.output?.map(item =>
-        (item.content || [])
-          .map(part => part.text || "")
-          .join("\n")
-      ).join("\n") ||
+      data.output
+        ?.map((item) =>
+          (item.content || [])
+            .map((part) => part.text || "")
+            .join("\n")
+        )
+        .join("\n") ||
       ""
     ).trim();
 
     if (!story) {
+      console.error("Gemini returned no story text:", data);
+
       return res.status(500).json({
-        error: "The AI did not return a story. Please try again."
+        error:
+          "The AI did not return a story. Please try again."
       });
     }
 
-    return res.status(200).json({ story });
+    return res.status(200).json({
+      story: story
+    });
   } catch (error) {
+    console.error("Story generation error:", error);
+
     return res.status(500).json({
-      error: "Unable to generate the story. Please try again."
+      error:
+        "Unable to generate the story. Please try again."
     });
   }
 }

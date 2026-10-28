@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#10101c">
-  <title>My AI Video Generator</title>
+  <title>My AI Story Video Generator</title>
 
   <style>
     * {
@@ -48,10 +48,10 @@
       font-weight: bold;
     }
 
+    input,
     textarea {
       display: block;
       width: 100%;
-      min-height: 145px;
       padding: 14px;
       border: 1px solid #555575;
       border-radius: 12px;
@@ -59,9 +59,14 @@
       color: white;
       font: inherit;
       line-height: 1.5;
+    }
+
+    textarea {
+      min-height: 125px;
       resize: vertical;
     }
 
+    input:focus,
     textarea:focus {
       outline: 2px solid #a78bfa;
       border-color: transparent;
@@ -98,9 +103,21 @@
       background: #383850;
     }
 
-    #message {
+    #message,
+    #storyMessage {
       color: #ddd6fe;
       line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #storyBox {
+      margin-top: 14px;
+      padding: 18px;
+      border: 1px solid #555575;
+      border-radius: 12px;
+      background: #131322;
+      line-height: 1.8;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
@@ -146,14 +163,35 @@
 
 <body>
   <main>
-    <h1>✨ My AI Video Generator</h1>
+    <h1>✨ My AI Story Video Generator</h1>
 
     <p class="subtitle">
-      Turn your imagination into a video. Describe the scene
-      you want to create below.
+      Create magical children's stories and turn your imagination
+      into videos. Start by entering a story topic.
     </p>
 
-    <label for="prompt">Describe your video</label>
+    <label for="topic">📚 Children's Story Topic</label>
+
+    <input
+      id="topic"
+      type="text"
+      maxlength="200"
+      placeholder="Example: Benny Bunny and the Missing Star"
+    >
+
+    <div class="actions">
+      <button id="storyButton" type="button">
+        ✨ Generate English Story
+      </button>
+    </div>
+
+    <p id="storyMessage" role="status" aria-live="polite">
+      Enter a topic to create a children's story.
+    </p>
+
+    <section id="storyBox" hidden></section>
+
+    <label for="prompt">🎬 Describe your video</label>
 
     <textarea
       id="prompt"
@@ -172,50 +210,120 @@
     </div>
 
     <p id="message" role="status" aria-live="polite">
-      Ready when you are. Enter a prompt to begin.
+      Ready when you are.
     </p>
 
     <section id="preview" aria-label="Video preview">
       <div>
-        <div style="font-size: 42px;">🎞️</div>
+        <div style="font-size:42px;">🎞️</div>
         <p>Your generated video will appear here.</p>
       </div>
     </section>
 
     <p class="hint">
-      Video generation requires a working server API and may use
-      account credits. Check your provider's pricing before generating.
+      Story generation uses your configured OpenAI API key.
+      Video generation uses your connected video service and may
+      consume credits. Voice narration is not connected yet.
     </p>
 
     <footer>
-      My AI Video Generator · Powered by your connected AI service
+      My AI Story Video Generator · Children's Story Mode
     </footer>
   </main>
 
   <script>
+    const topicInput = document.getElementById("topic");
+    const storyButton = document.getElementById("storyButton");
+    const storyMessage = document.getElementById("storyMessage");
+    const storyBox = document.getElementById("storyBox");
+
     const promptInput = document.getElementById("prompt");
     const generateButton = document.getElementById("generateButton");
     const clearButton = document.getElementById("clearButton");
     const message = document.getElementById("message");
     const preview = document.getElementById("preview");
 
+    storyButton.addEventListener("click", generateStory);
     generateButton.addEventListener("click", generateVideo);
 
     clearButton.addEventListener("click", () => {
+      topicInput.value = "";
       promptInput.value = "";
-      message.textContent = "Prompt cleared. Enter a new video description.";
+      storyBox.hidden = true;
+      storyBox.textContent = "";
+      storyMessage.textContent = "Enter a topic to create a children's story.";
+      message.textContent = "Cleared. Ready when you are.";
+
       preview.replaceChildren();
+
       const placeholder = document.createElement("div");
       placeholder.textContent = "🎞️ Your video preview will appear here.";
       preview.appendChild(placeholder);
     });
+
+    async function generateStory() {
+      const topic = topicInput.value.trim();
+
+      if (!topic) {
+        storyMessage.textContent = "Please enter a story topic first.";
+        topicInput.focus();
+        return;
+      }
+
+      storyButton.disabled = true;
+      storyMessage.textContent = "✨ Creating your English story...";
+      storyBox.hidden = true;
+
+      try {
+        const response = await fetch("/api/story", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ topic })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || "Unable to create the story."
+          );
+        }
+
+        if (!data.story) {
+          throw new Error("The AI did not return a story.");
+        }
+
+        storyBox.textContent = data.story;
+        storyBox.hidden = false;
+        storyMessage.textContent =
+          "🌟 Your story is ready! You can use it to guide your video.";
+
+        // Put the story into the video prompt as a helpful starting point.
+        promptInput.value =
+          "Create a child-friendly animated video inspired by this story. " +
+          "Use colorful, gentle visuals and keep the characters consistent.\n\n" +
+          data.story;
+
+      } catch (error) {
+        storyMessage.textContent =
+          "Story error: " + error.message;
+      } finally {
+        storyButton.disabled = false;
+      }
+    }
 
     function showVideo(url) {
       if (typeof url !== "string") return false;
 
       try {
         const parsed = new URL(url);
-        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+
+        if (
+          parsed.protocol !== "https:" &&
+          parsed.protocol !== "http:"
+        ) {
           return false;
         }
 
@@ -224,7 +332,15 @@
         video.playsInline = true;
         video.src = parsed.href;
 
-        preview.replaceChildren(video);
+        const downloadLink = document.createElement("a");
+        downloadLink.href = parsed.href;
+        downloadLink.target = "_blank";
+        downloadLink.rel = "noopener noreferrer";
+        downloadLink.textContent = "Open or download video";
+        downloadLink.style.display = "block";
+        downloadLink.style.marginTop = "12px";
+
+        preview.replaceChildren(video, downloadLink);
         return true;
       } catch {
         return false;
@@ -235,7 +351,7 @@
       const prompt = promptInput.value.trim();
 
       if (!prompt) {
-        message.textContent = "Please enter a video description first.";
+        message.textContent = "Please generate a story or enter a video description first.";
         promptInput.focus();
         return;
       }
@@ -274,13 +390,14 @@
           message.textContent = "Your video is ready!";
         } else {
           message.textContent =
-            "The API responded. Your video may still be processing, " +
-            "or the response may contain a job ID instead of a video URL.";
+            "Video request submitted. The job may still be processing.";
 
           preview.textContent = JSON.stringify(data, null, 2);
         }
       } catch (error) {
-        message.textContent = "Unable to generate video: " + error.message;
+        message.textContent =
+          "Unable to generate video: " + error.message;
+
         preview.textContent =
           "Please check the deployment and server API configuration.";
       } finally {

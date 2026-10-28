@@ -10,8 +10,7 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error:
-        "Missing GEMINI_API_KEY. Please check your Vercel environment variables."
+      error: "Missing GEMINI_API_KEY in Vercel."
     });
   }
 
@@ -47,16 +46,10 @@ export default async function handler(req, res) {
             "Write an original children's story in simple English " +
             "for children ages 3 to 7 about this topic: " +
             topic +
-            "\n\n" +
-            "Requirements:\n" +
-            "- Write 120 to 180 words.\n" +
-            "- Give the story a short, charming title.\n" +
-            "- Use simple English suitable for young children.\n" +
-            "- Make the story warm, cute, imaginative, and safe.\n" +
-            "- Include a clear beginning, middle, and ending.\n" +
-            "- End with a happy or comforting conclusion.\n" +
-            "- Make it suitable for children's video narration.\n" +
-            "- Return only the story and its title, without explanations."
+            "\n\nWrite 120 to 180 words. Include a short title, " +
+            "a clear beginning, middle, and ending, cute characters, " +
+            "and a happy ending. Make it safe and suitable for " +
+            "children's video narration. Return only the story."
         })
       }
     );
@@ -64,45 +57,65 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini story API error:", data);
+      console.error("Gemini API error:", data);
 
       return res.status(response.status).json({
         error:
           data.error?.message ||
-          "Story generation failed. Please try again."
+          "Gemini could not generate the story."
       });
     }
 
-    const story = (
-      data.output_text ||
-      data.output
-        ?.map((item) =>
-          (item.content || [])
-            .map((part) => part.text || "")
-            .join("\n")
-        )
-        .join("\n") ||
-      ""
-    ).trim();
+    // Extract text from the Interactions API response.
+    let story = "";
+
+    if (typeof data.output_text === "string") {
+      story = data.output_text;
+    }
+
+    if (!story && Array.isArray(data.steps)) {
+      story = data.steps
+        .filter(step => step.type === "model_output")
+        .flatMap(step => step.content || [])
+        .filter(part => part.type === "text")
+        .map(part => part.text || "")
+        .join("\n");
+    }
+
+    // Compatibility fallback for other response shapes.
+    if (!story && Array.isArray(data.output)) {
+      story = data.output
+        .flatMap(item => item.content || [])
+        .filter(part => !part.type || part.type === "text")
+        .map(part => part.text || "")
+        .join("\n");
+    }
+
+    story = story.trim();
 
     if (!story) {
-      console.error("Gemini returned no story text:", data);
+      console.error(
+        "Gemini returned no story text. Status:",
+        data.status,
+        "Response keys:",
+        Object.keys(data)
+      );
 
-      return res.status(500).json({
+      return res.status(502).json({
         error:
-          "The AI did not return a story. Please try again."
+          "Gemini returned no story text. Status: " +
+          (data.status || "unknown") +
+          ". Please check the Vercel function logs."
       });
     }
 
-    return res.status(200).json({
-      story: story
-    });
+    return res.status(200).json({ story });
   } catch (error) {
     console.error("Story generation error:", error);
 
     return res.status(500).json({
       error:
-        "Unable to generate the story. Please try again."
+        "Unable to generate the story. Please check the Vercel logs."
     });
   }
 }
